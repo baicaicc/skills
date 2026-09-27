@@ -1,0 +1,42 @@
+# EdgeOne Pages 标准 CI/CD workflow（纯前端项目模板，源自 raz 已跑通配置）
+# 用法：复制为仓库的 .github/workflows/deploy.yml，
+#       把 deploy job 里 -n 后面的 <项目名> 换成 EdgeOne Pages 项目名。
+# 前提：package.json 里有 packageManager 字段固定 pnpm 版本（pnpm/action-setup@v4 读取它）；
+#       仓库 Secrets 里已配置 EDGEONE_PAGES_API_TOKEN。
+name: test-and-deploy
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+jobs:
+  test: # PR 也跑，只测不部署
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: pnpm/action-setup@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: pnpm
+      - run: pnpm install --frozen-lockfile
+      - run: pnpm test
+      - run: pnpm build
+
+  deploy: # 仅 main push 触发
+    if: github.ref == 'refs/heads/main' && github.event_name == 'push'
+    needs: test
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: pnpm/action-setup@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: pnpm
+      - run: pnpm install --frozen-lockfile
+      - run: pnpm build
+      - run: npx edgeone@1.6.41 makers deploy ./dist -n <项目名>
+        env:
+          EDGEONE_PAGES_API_TOKEN: ${{ secrets.EDGEONE_PAGES_API_TOKEN }}
