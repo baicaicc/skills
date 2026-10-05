@@ -1,0 +1,31 @@
+#!/usr/bin/env bash
+# Keep the runtime and credentials on kidsbox; forward stdin and preserve its exit code.
+set -euo pipefail
+
+usage() {
+  cat <<'EOF'
+Usage: muse task|download|refresh [arguments]
+  task      Send task text on stdin, or use --resume REQUEST_ID.
+  download  Download a workspace file to a path on kidsbox.
+  refresh   Refresh cai/lin credentials using their existing Roxy windows.
+All arguments are passed to the existing kidsbox tools. Use ACTION --help for details.
+EOF
+}
+
+case "${1:-}" in
+  -h|--help) usage; exit 0 ;;
+  task) entry=muse_task.py ;;
+  download) entry=muse_download.py ;;
+  refresh) entry=connect_accounts.py ;;
+  *) usage >&2; exit 2 ;;
+esac
+shift
+lab=/Users/kidsbox/muse-gadget-lab
+python="$lab/.venv/bin/python"
+if [[ -x "$python" && -f "$lab/$entry" ]]; then
+  exec "$python" "$lab/$entry" "$@"
+fi
+
+# Quote each argument individually; never interpolate task text into the SSH command.
+printf -v remote_cmd '%q ' "$python" "$lab/$entry" "$@"
+exec ssh -T -o BatchMode=yes -o ConnectTimeout=6 kidsbox "$remote_cmd"

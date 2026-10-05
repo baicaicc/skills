@@ -5,8 +5,7 @@
 #   sync                # 同步全部已配置且可用的 agent
 #   sync kimi-code      # 只同步指定 agent
 #
-# 源头永远在本仓库（git 管理、多机同步）；agent 目录里的是副本，
-# 直接改副本会在下次 sync 时被覆盖——要改请改本仓库再 sync。
+# 源头在本仓库。共享目录保存副本，客户端优先软链到共享目录。
 set -euo pipefail
 
 SRC="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)/skills"
@@ -15,28 +14,62 @@ dest_for() {
   case "$1" in
     kimi-code)   echo "$HOME/.kimi-code/skills" ;;
     claude-code) echo "$HOME/.claude/skills" ;;
-    # 新 agent 在这里加一行：
-    #   agent名) echo "$HOME/<它的技能目录>" ;;
+    codex)       echo "$HOME/.codex/skills" ;;
+    codebuddy)   echo "$HOME/.codebuddy/skills" ;;
+    zcode)       echo "$HOME/.zcode/skills" ;;
     *)           return 1 ;;
   esac
 }
 
 agents=("$@")
-if [ ${#agents[@]} -eq 0 ]; then
-  agents=(kimi-code claude-code)
+explicit=${#agents[@]}
+if [ "$explicit" -eq 0 ]; then
+  agents=(kimi-code claude-code codex codebuddy zcode)
 fi
+
+shared="$HOME/.agents/skills"
+mkdir -p "$shared"
+for d in "$SRC"/*/; do
+  [ -d "$d" ] || continue
+  name=$(basename "$d")
+  if [ -L "$shared/$name" ]; then
+    echo "共享目录已有软链：$shared/$name；拒绝覆盖" >&2
+    exit 1
+  fi
+  mkdir -p "$shared/$name"
+  rsync -a "$d" "$shared/$name/"
+done
 
 for a in "${agents[@]}"; do
   if ! dest=$(dest_for "$a"); then
-    echo "[$a] 跳过：未配置目标目录"
+    echo "[$a] 未配置目标目录" >&2
+    exit 2
+  fi
+  # 默认只分发到已经安装的客户端；显式选择时可创建其目录。
+  if [ "$explicit" -eq 0 ] && [ ! -d "$(dirname "$dest")" ]; then
+    echo "[$a] 跳过：客户端未安装"
     continue
   fi
   mkdir -p "$dest"
   for d in "$SRC"/*/; do
     [ -d "$d" ] || continue
     name=$(basename "$d")
-    rm -rf "$dest/$name"
-    cp -R "$d" "$dest/$name"
+    target="$dest/$name"
+    if [ -L "$target" ]; then
+      if [ "$(readlink "$target")" != "$shared/$name" ] &&
+         [ "$(readlink "$target")" != "../../.agents/skills/$name" ]; then
+        echo "[$a] 已有其他来源的软链：$target；拒绝覆盖" >&2
+        exit 1
+      fi
+    elif [ -d "$target" ]; then
+      # 兼容以前安装的副本，不删除其额外文件。
+      rsync -a "$d" "$target/"
+    elif [ -e "$target" ]; then
+      echo "[$a] 目标不是技能目录：$target" >&2
+      exit 1
+    else
+      ln -s "$shared/$name" "$target"
+    fi
     echo "  $name → $dest/$name"
   done
   echo "[$a] 同步完成"
