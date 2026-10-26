@@ -1,0 +1,130 @@
+#!/usr/bin/env python3
+"""grokbot-lark-forwarder：把飞书群里以 eggbot 开头的消息转给 dr eggbot。
+
+用用户身份（lark-cli --as user）每隔几秒读一次群消息，含话题内回复。
+消息正文以 `eggbot` / `@eggbot` / `dr eggbot` / `grokbot` 开头时，调用
+  grokbot-wake "<去掉唤醒词后的正文>" --from "lark:<发送人>" --chat <chat_id> --msg <message_id>
+正文（去掉唤醒词后）以 ping 开头时加 --ping。dr eggbot 收到后在该消息下回复。
+
+首次启动只记录已有消息，不回放历史。已处理的 message_id 记在
+~/.local/state/grokbot/lark-forwarder/seen.json，重启不重复唤醒。
+不读取、不打印任何凭据：lark-cli 自己管理登录，grokbot-wake 自己读 wake.env。
+"""
+import argparse
+import datetime as dt
+import json
+import os
+import re
+import subprocess
+import sys
+import time
+
+HOME = os.path.expanduser("~")
+STATE_DIR = os.path.join(HOME, ".local/state/grokbot/lark-forwarder")
+SEEN_FILE = os.path.join(STATE_DIR, "seen.json")
+LARK = os.environ.get("LARK_CLI", os.path.join(HOME, ".local/bin/lark-cli"))
+WAKE = os.environ.get("GROKBOT_WAKE", os.path.join(HOME, ".local/bin/grokbot-wake"))
+DEFAULT_CHAT = "oc_61404784da035d24153a395caabd5f84"  # All in One · 统一工作群
+TRIGGER = re.compile(r"^\s*@?\s*(?:dr[\s._-]*)?(?:eggbot|grokbot)\b[\s:：,，]*", re.I)
+PING = re.compile(r"^\s*ping\b", re.I)
+SEEN_LIMIT = 5000
+
+
+def log(msg):
+    ts = dt.datetime.now().astimezone().strftime("%Y-%m-%d %H:%M:%S%z")
+    print(f"{ts} {msg}", flush=True)
+
+
+def load_seen():
+    try:
+        with open(SEEN_FILE, encoding="utf-8") as f:
+            return json.load(f)
+    except (FileNotFoundError, ValueError):
+        return None
+
+
+def save_seen(seen):
+    os.makedirs(STATE_DIR, mode=0o700, exist_ok=True)
+    tmp = SEEN_FILE + ".tmp"
+    with open(tmp, "w", encoding="utf-8") as f:
+        json.dump(seen[-SEEN_LIMIT:], f)
+    os.replace(tmp, SEEN_FILE)
+
+
+def fetch(chat, window_hours):
+    start = (dt.datetime.now().astimezone() - dt.timedelta(hours=window_hours)).isoformat(timespec="seconds")
+    cmd = [LARK, "im", "+chat-messages-list", "--chat-id", chat, "--as", "user",
+           "--order", "asc", "--page-size", "50", "--no-reactions", "--start", start]
+    p = subprocess.run(cmd, capture_output=True, text=True, timeout=60)
+    if p.returncode != 0:
+        raise RuntimeError(f"lark-cli exit {p.returncode}: {p.stderr.strip()[-300:]}")
+    data = json.loads(p.stdout)
+    if not data.get("ok", True):
+        raise RuntimeError(str(data.get("error"))[:300])
+    out = []
+    for m in data.get("data", {}).get("messages", []):
+        out.append(m)
+        out.extend(r for r in (m.get("thread_replies") or []) if isinstance(r, dict))
+    return out
+
+
+def sender_name(m):
+    s = m.get("sender") or {}
+    return (s.get("name") or s.get("id") or "unknown") if isinstance(s, dict) else str(s)
+
+
+def wake(m, chat):
+    text = TRIGGER.sub("", m.get("content") or "", count=1).strip()
+    cmd = [WAKE]
+    if PING.match(text):
+        cmd.append("--ping")
+    cmd += [text or "（空消息，请看原消息上下文）", "--from", f"lark:{sender_name(m)}",
+            "--chat", chat, "--msg", m["message_id"]]
+    p = subprocess.run(cmd, capture_output=True, text=True, timeout=30)
+    rid = p.stdout.strip().splitlines()[0] if p.stdout.strip() else ""
+    log(f"wake {m['message_id']} from={sender_name(m)} ping={'--ping' in cmd} exit={p.returncode} "
+        f"request_id={rid} {p.stderr.strip()[-200:]}")
+
+
+def main():
+    ap = argparse.ArgumentParser()
+    ap.add_argument("--chat", default=DEFAULT_CHAT)
+    ap.add_argument("--interval", type=int, default=15, help="轮询间隔秒数")
+    ap.add_argument("--window-hours", type=float, default=6, help="每次回看多少小时内的话题")
+    ap.add_argument("--once", action="store_true", help="只跑一轮（调试）")
+    a = ap.parse_args()
+
+    seen = load_seen()
+    first = seen is None
+    seen = seen or []
+    seen_set = set(seen)
+    log(f"start chat={a.chat} interval={a.interval}s window={a.window_hours}h first_run={first}")
+    errors = 0
+    while True:
+        try:
+            msgs = fetch(a.chat, a.window_hours)
+            errors = 0
+            for m in msgs:
+                mid = m.get("message_id")
+                if not mid or mid in seen_set:
+                    continue
+                seen_set.add(mid)
+                seen.append(mid)
+                if first or m.get("deleted") in (True, "True"):
+                    continue
+                if TRIGGER.match(m.get("content") or ""):
+                    wake(m, a.chat)
+            if first:
+                log(f"baseline: {len(seen)} existing messages marked seen")
+                first = False
+            save_seen(seen)
+        except Exception as e:  # 网络/令牌临时错误：记日志、退避后继续
+            errors += 1
+            log(f"poll error #{errors}: {e}")
+        if a.once:
+            return
+        time.sleep(a.interval if errors == 0 else min(300, a.interval * 2 ** min(errors, 5)))
+
+
+if __name__ == "__main__":
+    sys.exit(main())
