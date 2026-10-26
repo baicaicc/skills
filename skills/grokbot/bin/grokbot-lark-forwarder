@@ -7,7 +7,8 @@
 正文（去掉唤醒词后）以 ping 开头时加 --ping。dr eggbot 收到后在该消息下回复。
 
 首次启动只记录已有消息，不回放历史。已处理的 message_id 记在
-~/.local/state/grokbot/lark-forwarder/seen.json，重启不重复唤醒。
+~/.local/state/grokbot/lark-forwarder/seen.json，重启不重复唤醒；
+唤醒前在 ~/.local/state/grokbot/lark-claimed/ 原子占用 message_id，与 grokbot-lark-bot 去重。
 不读取、不打印任何凭据：lark-cli 自己管理登录，grokbot-wake 自己读 wake.env。
 """
 import argparse
@@ -28,6 +29,7 @@ DEFAULT_CHAT = "oc_61404784da035d24153a395caabd5f84"  # All in One · 统一工�
 TRIGGER = re.compile(r"^\s*@?\s*(?:dr[\s._-]*)?(?:eggbot|grokbot)\b[\s:：,，]*", re.I)
 PING = re.compile(r"^\s*ping\b", re.I)
 SEEN_LIMIT = 5000
+CLAIM_DIR = os.path.join(HOME, ".local/state/grokbot/lark-claimed")  # 与 grokbot-lark-bot 共用
 
 
 def log(msg):
@@ -66,6 +68,18 @@ def fetch(chat, window_hours):
         out.append(m)
         out.extend(r for r in (m.get("thread_replies") or []) if isinstance(r, dict))
     return out
+
+
+def claim(message_id):
+    """原子占用：与 grokbot-lark-bot 共用，同一条消息只唤醒一次。"""
+    os.makedirs(CLAIM_DIR, mode=0o700, exist_ok=True)
+    try:
+        fd = os.open(os.path.join(CLAIM_DIR, message_id), os.O_CREAT | os.O_EXCL | os.O_WRONLY, 0o600)
+    except FileExistsError:
+        return False
+    os.write(fd, b"forwarder\n")
+    os.close(fd)
+    return True
 
 
 def sender_name(m):
@@ -113,7 +127,10 @@ def main():
                 if first or m.get("deleted") in (True, "True"):
                     continue
                 if TRIGGER.match(m.get("content") or ""):
-                    wake(m, a.chat)
+                    if claim(mid):
+                        wake(m, a.chat)
+                    else:
+                        log(f"skip {mid}: already claimed")
             if first:
                 log(f"baseline: {len(seen)} existing messages marked seen")
                 first = False

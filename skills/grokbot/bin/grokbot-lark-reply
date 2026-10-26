@@ -1,0 +1,78 @@
+#!/usr/bin/env python3
+"""grokbot-lark-reply：以 dr eggbot 的飞书机器人身份回复或发消息（仅标准库）。
+
+  grokbot-lark-reply --msg om_xxx [--thread] "文本"     # 回复某条消息（--thread 在话题内回复）
+  grokbot-lark-reply --chat oc_xxx "文本"               # 直接发到群/会话
+  文本也可从 stdin 读：echo 文本 | grokbot-lark-reply --msg om_xxx -
+  --markdown：按 Markdown 发（post 富文本）
+
+凭据读 ~/.config/grokbot/lark-bot.env，不打印。成功时输出新消息的 message_id。
+"""
+import argparse
+import json
+import os
+import sys
+import urllib.request
+
+ENV_FILE = os.path.expanduser("~/.config/grokbot/lark-bot.env")
+
+
+def load_env():
+    env = {}
+    with open(ENV_FILE, encoding="utf-8") as f:
+        for line in f:
+            if "=" in line and not line.lstrip().startswith("#"):
+                k, v = line.strip().split("=", 1)
+                env[k] = v.strip('"').strip("'")
+    return env
+
+
+def call(base, method, path, body, token=None):
+    headers = {"Content-Type": "application/json; charset=utf-8"}
+    if token:
+        headers["Authorization"] = "Bearer " + token
+    req = urllib.request.Request(base + path, data=json.dumps(body).encode(), headers=headers, method=method)
+    try:
+        with urllib.request.urlopen(req, timeout=15) as r:
+            return json.load(r)
+    except urllib.error.HTTPError as e:
+        return json.loads(e.read() or b"{}")
+
+
+def main():
+    ap = argparse.ArgumentParser()
+    g = ap.add_mutually_exclusive_group(required=True)
+    g.add_argument("--msg")
+    g.add_argument("--chat")
+    ap.add_argument("--thread", action="store_true")
+    ap.add_argument("--markdown", action="store_true")
+    ap.add_argument("text")
+    a = ap.parse_args()
+    text = sys.stdin.read() if a.text == "-" else a.text
+    env = load_env()
+    base = "https://open.larksuite.com" if env.get("GROKBOT_LARK_BRAND", "lark") == "lark" else "https://open.feishu.cn"
+    t = call(base, "POST", "/open-apis/auth/v3/tenant_access_token/internal",
+             {"app_id": env["GROKBOT_LARK_APP_ID"], "app_secret": env["GROKBOT_LARK_APP_SECRET"]})
+    if t.get("code") != 0:
+        print("token error: %s %s" % (t.get("code"), t.get("msg")), file=sys.stderr)
+        return 1
+    if a.markdown:
+        msg_type, content = "post", {"zh_cn": {"content": [[{"tag": "md", "text": text}]]}}
+    else:
+        msg_type, content = "text", {"text": text}
+    body = {"msg_type": msg_type, "content": json.dumps(content, ensure_ascii=False)}
+    if a.msg:
+        body["reply_in_thread"] = a.thread
+        d = call(base, "POST", "/open-apis/im/v1/messages/%s/reply" % a.msg, body, t["tenant_access_token"])
+    else:
+        body["receive_id"] = a.chat
+        d = call(base, "POST", "/open-apis/im/v1/messages?receive_id_type=chat_id", body, t["tenant_access_token"])
+    if d.get("code") != 0:
+        print("send error: %s %s" % (d.get("code"), d.get("msg")), file=sys.stderr)
+        return 1
+    print(d["data"]["message_id"])
+    return 0
+
+
+if __name__ == "__main__":
+    sys.exit(main())
