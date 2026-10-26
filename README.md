@@ -45,3 +45,4 @@ bin/sync kimi-code         # 只分发到指定 agent
 |---|---|---|
 | [deploy-edgeone-pages](skills/deploy-edgeone-pages/SKILL.md) | 部署/上线纯前端项目到腾讯云 EdgeOne Pages（GitHub Actions CI/CD），或排查 EdgeOne 部署问题 | 1.0.0 |
 | [muse](skills/muse/SKILL.md) | 指定 cai / lin / zhu 的 Muse 派任务、恢复结果、下载文件；其他机器通过 SSH 调用 kidsbox | — |
+| [grokbot](skills/grokbot/SKILL.md) | 唤醒 dr eggbot（Grok Bot）处理机器、网络、能力健康、仓库 PR 等个人系统任务，并等待/读取它写回的结果 | — |

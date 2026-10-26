@@ -1,0 +1,188 @@
+#!/bin/sh
+# grokbot-wake: 唤醒 dr eggbot（Grok Bot），并可等待/读取它写回的结果。
+# 依赖：POSIX sh、curl、python3（仅用于 JSON）。macOS 与 Ubuntu 通用。
+# 配置：~/.config/grokbot/wake.env（mode 600）提供 GROKBOT_WAKE_URL、GROKBOT_WAKE_KEY、
+#       可选 GROKBOT_REPLY_HOST。密钥只在该文件里，本脚本从不打印它。
+set -eu
+
+usage() {
+  cat <<'USAGE'
+usage:
+  grokbot-wake "task" [--from NAME] [--chat oc_xxx --msg om_xxx] [--wait [SECONDS]]
+  grokbot-wake --ping [--wait [SECONDS]]
+  grokbot-wake --result REQUEST_ID
+
+stdout 第一行是 request_id。--wait 每 5 秒读一次回执文件，直到最终状态或超时
+（task 默认 900 秒，ping 默认 120 秒）。
+exit: 0 done | 1 唤醒失败 | 2 用法错误 | 3 refused | 4 failed | 5 超时/尚无最终结果
+USAGE
+}
+
+STATE_DIR="$HOME/.local/state/grokbot"
+REPLY_DIR="$STATE_DIR/replies"
+POLL=5
+
+valid_id() {
+  case "$1" in ''|*[!A-Za-z0-9._-]*) return 1 ;; esac
+}
+
+# 读回执文件：打印状态；最终状态时打印 summary/details。返回 0 done、3 refused、4 failed、
+# 10 尚无最终状态（文件不存在、working、或正被写入的半截 JSON）。
+show_result() {
+  python3 - "$1" "$2" <<'PY'
+import json, sys
+path, rid = sys.argv[1], sys.argv[2]
+try:
+    with open(path, encoding="utf-8") as f:
+        d = json.load(f)
+except FileNotFoundError:
+    sys.exit(10)
+except (ValueError, OSError):
+    sys.exit(10)
+if not isinstance(d, dict):
+    sys.exit(10)
+status = str(d.get("status", ""))
+codes = {"done": 0, "refused": 3, "failed": 4}
+if status not in codes:
+    sys.exit(10)
+def fmt(v):
+    return v if isinstance(v, str) else json.dumps(v, ensure_ascii=False, indent=2)
+print("request_id: %s" % d.get("request_id", rid))
+print("status: %s" % status)
+if d.get("updated_at"):
+    print("updated_at: %s" % d["updated_at"])
+print("summary: %s" % fmt(d.get("summary", "")))
+if d.get("details") not in (None, ""):
+    print("details:")
+    print(fmt(d["details"]))
+sys.exit(codes[status])
+PY
+}
+
+current_status() {
+  python3 - "$1" <<'PY' 2>/dev/null || echo "pending"
+import json, sys
+try:
+    with open(sys.argv[1], encoding="utf-8") as f:
+        print(json.load(f).get("status") or "pending")
+except FileNotFoundError:
+    print("pending")
+except Exception:
+    print("pending")
+PY
+}
+
+# 等待最终状态；超时返回 5。
+wait_result() {
+  rid=$1; limit=$2; file="$REPLY_DIR/$rid.json"; waited=0; last=""
+  while :; do
+    rc=0; show_result "$file" "$rid" || rc=$?
+    [ "$rc" -ne 10 ] && return "$rc"
+    st=$(current_status "$file")
+    if [ "$st" != "$last" ]; then
+      echo "[grokbot-wake] $rid: $st (${waited}s)" >&2; last=$st
+    fi
+    if [ "$waited" -ge "$limit" ]; then
+      echo "[grokbot-wake] 超时：${limit}s 内没有最终结果；稍后用 grokbot-wake --result $rid 再读" >&2
+      return 5
+    fi
+    sleep "$POLL"; waited=$((waited + POLL))
+  done
+}
+
+TASK=""; FROM=""; CHAT=""; MSG=""; KIND="task"; WAIT=""; RESULT=""
+while [ $# -gt 0 ]; do
+  case "$1" in
+    -h|--help) usage; exit 0 ;;
+    --from) [ $# -ge 2 ] || { usage >&2; exit 2; }; FROM=$2; shift 2 ;;
+    --chat) [ $# -ge 2 ] || { usage >&2; exit 2; }; CHAT=$2; shift 2 ;;
+    --msg)  [ $# -ge 2 ] || { usage >&2; exit 2; }; MSG=$2; shift 2 ;;
+    --ping) KIND="ping"; shift ;;
+    --wait)
+      WAIT="default"; shift
+      case "${1:-}" in ''|*[!0-9]*) ;; *) WAIT=$1; shift ;; esac ;;
+    --result) [ $# -ge 2 ] || { usage >&2; exit 2; }; RESULT=$2; shift 2 ;;
+    --) shift; TASK="$TASK${TASK:+ }$*"; break ;;
+    -*) echo "unknown option: $1" >&2; usage >&2; exit 2 ;;
+    *) TASK="$TASK${TASK:+ }$1"; shift ;;
+  esac
+done
+
+if [ -n "$RESULT" ]; then
+  valid_id "$RESULT" || { echo "bad request_id: $RESULT" >&2; exit 2; }
+  if [ -n "$WAIT" ]; then
+    [ "$WAIT" = default ] && WAIT=900
+    wait_result "$RESULT" "$WAIT"; exit $?
+  fi
+  rc=0; show_result "$REPLY_DIR/$RESULT.json" "$RESULT" || rc=$?
+  if [ "$rc" -eq 10 ]; then
+    if [ -f "$REPLY_DIR/$RESULT.json" ]; then
+      echo "request_id: $RESULT"; echo "status: $(current_status "$REPLY_DIR/$RESULT.json")"
+    else
+      echo "request_id: $RESULT"; echo "status: pending (还没有回执文件)"
+    fi
+    exit 5
+  fi
+  exit "$rc"
+fi
+
+[ "$KIND" = ping ] && TASK="${TASK:-ping: reply pong}"
+[ -n "$TASK" ] || { usage >&2; exit 2; }
+
+ENV_FILE="$HOME/.config/grokbot/wake.env"
+[ -r "$ENV_FILE" ] || { echo "missing $ENV_FILE" >&2; exit 1; }
+# shellcheck disable=SC1090
+. "$ENV_FILE"
+: "${GROKBOT_WAKE_URL:?GROKBOT_WAKE_URL not set in wake.env}"
+: "${GROKBOT_WAKE_KEY:?GROKBOT_WAKE_KEY not set in wake.env}"
+
+HOST_SHORT=$(hostname -s 2>/dev/null || hostname)
+if [ -n "${GROKBOT_REPLY_HOST:-}" ]; then
+  REPLY_HOST=$GROKBOT_REPLY_HOST
+else
+  case "$HOST_SHORT" in
+    keluoluo*) REPLY_HOST=keluoluo ;;
+    ubuntu*) REPLY_HOST=ubuntu ;;
+    *) REPLY_HOST=$HOST_SHORT ;;
+  esac
+fi
+[ -n "$FROM" ] || FROM="${USER:-agent}@$REPLY_HOST"
+
+RAND=$(od -An -N4 -tx1 /dev/urandom | tr -d ' \n')
+RID="$(date +%Y%m%dT%H%M%S)-$REPLY_HOST-$RAND"
+mkdir -p "$REPLY_DIR"; chmod 700 "$STATE_DIR" "$REPLY_DIR" 2>/dev/null || true
+
+BODY=$(python3 - "$RID" "$FROM" "$TASK" "$KIND" "$REPLY_HOST" "$CHAT" "$MSG" <<'PY'
+import json, sys
+rid, frm, task, kind, host, chat, msg = sys.argv[1:8]
+reply = {"host": host, "inbox": "~/.local/state/grokbot/replies/%s.json" % rid}
+if chat:
+    reply["lark_chat_id"] = chat
+if msg:
+    reply["lark_message_id"] = msg
+print(json.dumps({"request_id": rid, "from": frm, "task": task, "kind": kind,
+                  "reply": reply}, ensure_ascii=False))
+PY
+)
+
+# 本地留一份请求记录（不含密钥），方便日后对照。
+printf '%s\n' "$BODY" > "$REPLY_DIR/$RID.request.json"
+
+# 密钥经 stdin 交给 curl 的 -H @- ，不出现在进程参数里。
+code=$(printf 'Authorization: Bearer %s\nX-Automation-Key: %s\n' "$GROKBOT_WAKE_KEY" "$GROKBOT_WAKE_KEY" |
+  curl -sS -m 8 -o /dev/null -w '%{http_code}' -X POST "$GROKBOT_WAKE_URL" \
+    -H 'Content-Type: application/json' -H @- --data-binary "$BODY") || code=000
+case "$code" in
+  2??) ;;
+  *)
+    printf '%s\n' "$BODY" >> "$STATE_DIR/wake-failed.jsonl"
+    echo "wake failed (HTTP $code), logged to $STATE_DIR/wake-failed.jsonl" >&2
+    exit 1 ;;
+esac
+
+echo "$RID"
+[ -n "$WAIT" ] || exit 0
+if [ "$WAIT" = default ]; then
+  if [ "$KIND" = ping ]; then WAIT=120; else WAIT=900; fi
+fi
+wait_result "$RID" "$WAIT"
