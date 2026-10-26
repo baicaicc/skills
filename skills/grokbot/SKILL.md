@@ -47,6 +47,21 @@ stdout 第一行永远是 `request_id`（形如 `20261026T011708-keluoluo-50d5a5
 | 4 | failed | 报告实际失败原因 |
 | 5 | 超时 / 尚无最终结果 | 用 `--result` 稍后再读 |
 
+## 飞书群里唤醒
+
+在「All in One · 统一工作群」发消息（顶层或话题内回复都行），正文以 `eggbot`、`@eggbot`、`dr eggbot` 或 `grokbot` 开头即可，例如：
+
+```
+eggbot 看下 ubuntu 的 docker 磁盘为什么满了
+eggbot ping 联通测试
+```
+
+dr eggbot 没有自己的飞书机器人身份，`@eggbot` 只是普通文字，不会弹出成员选择。keluoluo 上的 launchd 服务 `com.baicaicc.grokbot-lark-forwarder` 用 `lark-cli --as user` 每 15 秒读一次群消息，命中唤醒词就调用 `grokbot-wake "<去掉唤醒词的正文>" --from lark:<发送人> --chat <群> --msg <消息>`；去掉唤醒词后以 `ping` 开头则按 ping 发。回执照常写到 keluoluo 的 `~/.local/state/grokbot/replies/`，dr eggbot 在原消息下回复。
+
+- 脚本：`bin/grokbot-lark-forwarder`（复制到 `~/.local/bin/`）；plist 模板：`references/com.baicaicc.grokbot-lark-forwarder.plist`
+- 日志：`~/.local/state/grokbot/lark-forwarder.log`；已处理消息：`~/.local/state/grokbot/lark-forwarder/seen.json`
+- 只回看 6 小时内的话题；首次启动不回放历史。依赖 keluoluo 上 lark-cli 的用户登录有效。
+
 ## 它不做的事
 
 以下请求它会 `refused`，需要时由用户本人操作或另行明确授权：

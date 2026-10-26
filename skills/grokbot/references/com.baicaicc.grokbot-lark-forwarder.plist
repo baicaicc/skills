@@ -1,0 +1,24 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<!-- 安装：sed "s#__HOME__#$HOME#g" 本文件 > ~/Library/LaunchAgents/com.baicaicc.grokbot-lark-forwarder.plist
+     然后 launchctl bootstrap gui/$(id -u) ~/Library/LaunchAgents/com.baicaicc.grokbot-lark-forwarder.plist -->
+<plist version="1.0">
+<dict>
+  <key>Label</key><string>com.baicaicc.grokbot-lark-forwarder</string>
+  <key>ProgramArguments</key>
+  <array>
+    <string>/usr/bin/env</string>
+    <string>python3</string>
+    <string>__HOME__/.local/bin/grokbot-lark-forwarder</string>
+  </array>
+  <key>EnvironmentVariables</key>
+  <dict>
+    <key>PATH</key><string>__HOME__/.local/bin:/opt/homebrew/bin:/usr/local/bin:/usr/bin:/bin</string>
+  </dict>
+  <key>RunAtLoad</key><true/>
+  <key>KeepAlive</key><true/>
+  <key>ThrottleInterval</key><integer>30</integer>
+  <key>StandardOutPath</key><string>__HOME__/.local/state/grokbot/lark-forwarder.log</string>
+  <key>StandardErrorPath</key><string>__HOME__/.local/state/grokbot/lark-forwarder.log</string>
+</dict>
+</plist>
