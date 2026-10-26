@@ -1,0 +1,190 @@
+#!/usr/bin/env python3
+"""grokbot-lark-bot：dr eggbot 的飞书机器人（link_GrokBot_keluoluo）长连接监听。
+
+群里 @ 这个机器人、或私聊它时，调用
+  grokbot-wake "<去掉 @ 后的正文>" --from lark:<发送人> --chat <chat_id> --msg <message_id>
+正文以 ping 开头时加 --ping。
+
+凭据在 ~/.config/grokbot/lark-bot.env（mode 600）：GROKBOT_LARK_APP_ID、
+GROKBOT_LARK_APP_SECRET、GROKBOT_LARK_BRAND（lark|feishu）。本脚本从不打印它们。
+依赖 lark-oapi（装在 ~/.local/share/grokbot/venv）。
+与 grokbot-lark-forwarder 共用 ~/.local/state/grokbot/lark-claimed/<message_id>
+做原子去重，同一条消息只唤醒一次。
+"""
+import json
+import os
+import re
+import subprocess
+import sys
+import threading
+import time
+import urllib.request
+
+import lark_oapi as lark
+
+HOME = os.path.expanduser("~")
+ENV_FILE = os.path.join(HOME, ".config/grokbot/lark-bot.env")
+CLAIM_DIR = os.path.join(HOME, ".local/state/grokbot/lark-claimed")
+WAKE = os.environ.get("GROKBOT_WAKE", os.path.join(HOME, ".local/bin/grokbot-wake"))
+PING = re.compile(r"^\s*ping\b", re.I)
+
+
+def log(msg):
+    print(time.strftime("%Y-%m-%d %H:%M:%S%z ") + msg, flush=True)
+
+
+def load_env():
+    env = {}
+    with open(ENV_FILE, encoding="utf-8") as f:
+        for line in f:
+            line = line.strip()
+            if line and not line.startswith("#") and "=" in line:
+                k, v = line.split("=", 1)
+                env[k.strip()] = v.strip().strip('"').strip("'")
+    return env
+
+
+def claim(message_id):
+    """原子占用：第一个创建成功的进程负责唤醒。"""
+    os.makedirs(CLAIM_DIR, mode=0o700, exist_ok=True)
+    try:
+        fd = os.open(os.path.join(CLAIM_DIR, message_id), os.O_CREAT | os.O_EXCL | os.O_WRONLY, 0o600)
+    except FileExistsError:
+        return False
+    os.write(fd, b"lark-bot\n")
+    os.close(fd)
+    return True
+
+
+class Api:
+    def __init__(self, base, app_id, secret):
+        self.base, self.app_id, self.secret = base, app_id, secret
+        self.token, self.exp = None, 0
+        self.names = {}
+
+    def _req(self, method, path, body=None, auth=True):
+        headers = {"Content-Type": "application/json; charset=utf-8"}
+        if auth:
+            headers["Authorization"] = "Bearer " + self.tat()
+        data = json.dumps(body).encode() if body is not None else None
+        req = urllib.request.Request(self.base + path, data=data, headers=headers, method=method)
+        with urllib.request.urlopen(req, timeout=15) as r:
+            return json.load(r)
+
+    def tat(self):
+        if not self.token or time.time() > self.exp - 300:
+            d = self._req("POST", "/open-apis/auth/v3/tenant_access_token/internal",
+                          {"app_id": self.app_id, "app_secret": self.secret}, auth=False)
+            if d.get("code") != 0:
+                raise RuntimeError("tenant_access_token: code %s %s" % (d.get("code"), d.get("msg")))
+            self.token, self.exp = d["tenant_access_token"], time.time() + int(d.get("expire", 7200))
+        return self.token
+
+    def bot_info(self):
+        return self._req("GET", "/open-apis/bot/v3/info").get("bot", {})
+
+    def user_name(self, open_id):
+        if open_id in self.names:
+            return self.names[open_id]
+        name = open_id
+        try:
+            d = self._req("GET", "/open-apis/contact/v3/users/%s?user_id_type=open_id" % open_id)
+            name = (d.get("data") or {}).get("user", {}).get("name") or open_id
+        except Exception:
+            pass
+        self.names[open_id] = name
+        return name
+
+
+def flatten(message_type, content, mentions, bot_open_id):
+    """返回 (正文, 是否 @ 了本机器人)。"""
+    try:
+        c = json.loads(content or "{}")
+    except ValueError:
+        c = {}
+    keymap, at_bot = {}, False
+    for m in mentions or []:
+        oid = getattr(getattr(m, "id", None), "open_id", None)
+        if oid == bot_open_id:
+            at_bot = True
+            keymap[m.key] = ""
+        else:
+            keymap[m.key] = "@" + (m.name or "")
+    if message_type == "text":
+        text = c.get("text", "")
+    elif message_type == "post":
+        body = c.get("content") or next((v.get("content") for v in c.values() if isinstance(v, dict)), [])
+        parts = [c.get("title") or ""]
+        for para in body or []:
+            line = ""
+            for el in para:
+                tag = el.get("tag")
+                if tag in ("text", "a"):
+                    line += el.get("text", "")
+                elif tag == "at":
+                    if el.get("user_id") == bot_open_id:
+                        at_bot = True
+                    else:
+                        line += "@" + (el.get("user_name") or "")
+            parts.append(line)
+        text = "\n".join(p for p in parts if p)
+    else:
+        text = "[%s 消息] %s" % (message_type, content)
+    for k, v in keymap.items():
+        text = text.replace(k, v)
+    return re.sub(r"[ \t]+", " ", text).strip(), at_bot
+
+
+def wake(text, sender, chat_id, message_id):
+    cmd = [WAKE]
+    if PING.match(text):
+        cmd.append("--ping")
+    cmd += [text or "（空消息，请看原消息上下文）", "--from", "lark:" + sender,
+            "--chat", chat_id, "--msg", message_id]
+    p = subprocess.run(cmd, capture_output=True, text=True, timeout=30)
+    rid = p.stdout.strip().splitlines()[0] if p.stdout.strip() else ""
+    log("wake %s from=%s ping=%s exit=%s request_id=%s %s" % (
+        message_id, sender, "--ping" in cmd, p.returncode, rid, p.stderr.strip()[-200:]))
+
+
+def main():
+    env = load_env()
+    brand = env.get("GROKBOT_LARK_BRAND", "lark")
+    base = "https://open.larksuite.com" if brand == "lark" else "https://open.feishu.cn"
+    api = Api(base, env["GROKBOT_LARK_APP_ID"], env["GROKBOT_LARK_APP_SECRET"])
+    bot = api.bot_info()
+    bot_open_id = bot.get("open_id")
+    log("bot %s app_id=%s open_id=%s" % (bot.get("app_name"), env["GROKBOT_LARK_APP_ID"], bot_open_id))
+
+    def on_message(data):
+        ev = data.event
+        msg, sender = ev.message, ev.sender
+        sid = getattr(sender.sender_id, "open_id", "") or ""
+        if sid == bot_open_id:
+            return
+        text, at_bot = flatten(msg.message_type, msg.content, msg.mentions, bot_open_id)
+        if msg.chat_type != "p2p" and not at_bot:
+            return
+        if not claim(msg.message_id):
+            log("skip %s: already claimed" % msg.message_id)
+            return
+        name = api.user_name(sid) if sender.sender_type == "user" else (sid or "bot")
+        threading.Thread(target=wake, args=(text, name, msg.chat_id, msg.message_id), daemon=True).start()
+
+    handler = (lark.EventDispatcherHandler.builder("", "")
+               .register_p2_im_message_receive_v1(on_message)
+               # 进群 / 单聊打开 / 已读事件：只记一行，免得 SDK 报 processor not found
+               .register_p2_im_chat_member_bot_added_v1(lambda d: log("bot added to chat"))
+               .register_p2_im_chat_member_bot_deleted_v1(lambda d: log("bot removed from chat"))
+               .register_p2_im_chat_access_event_bot_p2p_chat_entered_v1(lambda d: None)
+               .register_p2_im_message_message_read_v1(lambda d: None)
+               .build())
+    cli = lark.ws.Client(env["GROKBOT_LARK_APP_ID"], env["GROKBOT_LARK_APP_SECRET"],
+                         event_handler=handler,
+                         domain=lark.LARK_DOMAIN if brand == "lark" else lark.FEISHU_DOMAIN,
+                         log_level=lark.LogLevel.WARNING)  # INFO 会把带 ticket 的 wss 地址写进日志
+    cli.start()
+
+
+if __name__ == "__main__":
+    sys.exit(main())

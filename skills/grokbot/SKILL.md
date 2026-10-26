@@ -47,20 +47,42 @@ stdout 第一行永远是 `request_id`（形如 `20261026T011708-keluoluo-50d5a5
 | 4 | failed | 报告实际失败原因 |
 | 5 | 超时 / 尚无最终结果 | 用 `--result` 稍后再读 |
 
-## 飞书群里唤醒
+## 飞书里唤醒
 
-在「All in One · 统一工作群」发消息（顶层或话题内回复都行），正文以 `eggbot`、`@eggbot`、`dr eggbot` 或 `grokbot` 开头即可，例如：
+### @ 机器人（主入口）
+
+dr eggbot 有自己的飞书机器人 **link_GrokBot_keluoluo**（app `cli_aa55a4eaa538c08f`），已在「All in One · 统一工作群」。在群里 @ 它，或直接私聊它，就会唤醒：
 
 ```
-eggbot 看下 ubuntu 的 docker 磁盘为什么满了
-eggbot ping 联通测试
+@link_GrokBot_keluoluo 看下 ubuntu 的 docker 磁盘为什么满了
+@link_GrokBot_keluoluo ping 联通测试
 ```
 
-dr eggbot 没有自己的飞书机器人身份，`@eggbot` 只是普通文字，不会弹出成员选择。keluoluo 上的 launchd 服务 `com.baicaicc.grokbot-lark-forwarder` 用 `lark-cli --as user` 每 15 秒读一次群消息，命中唤醒词就调用 `grokbot-wake "<去掉唤醒词的正文>" --from lark:<发送人> --chat <群> --msg <消息>`；去掉唤醒词后以 `ping` 开头则按 ping 发。回执照常写到 keluoluo 的 `~/.local/state/grokbot/replies/`，dr eggbot 在原消息下回复。
+keluoluo 上的 launchd 服务 `com.baicaicc.grokbot-lark-bot` 用 lark-oapi 长连接收 `im.message.receive_v1`。群消息只有 @ 到它才处理（应用有读全部群消息权限，靠这条过滤），私聊全部处理；去掉 @ 后调用 `grokbot-wake "<正文>" --from lark:<发送人> --chat <群> --msg <消息>`，正文以 `ping` 开头则加 `--ping`。它自己发的消息不处理。
 
-- 脚本：`bin/grokbot-lark-forwarder`（复制到 `~/.local/bin/`）；plist 模板：`references/com.baicaicc.grokbot-lark-forwarder.plist`
-- 日志：`~/.local/state/grokbot/lark-forwarder.log`；已处理消息：`~/.local/state/grokbot/lark-forwarder/seen.json`
-- 只回看 6 小时内的话题；首次启动不回放历史。依赖 keluoluo 上 lark-cli 的用户登录有效。
+- 脚本：`bin/grokbot-lark-bot`，用 `~/.local/share/grokbot/venv/bin/python` 跑（venv 里装 `lark-oapi`）；plist 模板：`references/com.baicaicc.grokbot-lark-bot.plist`
+- 日志：`~/.local/state/grokbot/lark-bot.log`，每次唤醒一行 `wake <om_> from=… ping=… exit=… request_id=…`
+- 凭据：`~/.config/grokbot/lark-bot.env`（mode 600）：`GROKBOT_LARK_APP_ID`、`GROKBOT_LARK_APP_SECRET`、`GROKBOT_LARK_BRAND=lark`。不要打印或提交。
+- 这个应用不在 BotMux 里，不要再 `botmux setup add` 它，否则两边抢同一条长连接。
+
+### 以机器人身份回复
+
+```sh
+grokbot-lark-reply --msg om_xxx --thread "处理完了：……"   # 在原消息的话题里回复
+grokbot-lark-reply --chat oc_xxx "……"                     # 直接发到群
+echo "**加粗**" | grokbot-lark-reply --msg om_xxx --markdown -   # 富文本，- 读 stdin
+```
+
+成功时打印新消息的 `message_id`。dr eggbot 回飞书用：`ssh keluoluo '~/.local/bin/grokbot-lark-reply --msg <om_> --thread "<text>"'`。
+
+### 唤醒词转发（备用）
+
+正文以 `eggbot`、`@eggbot`、`dr eggbot` 或 `grokbot` 开头（不用真的 @）也能唤醒。服务 `com.baicaicc.grokbot-lark-forwarder` 用 `lark-cli --as user` 每 15 秒读一次群消息，命中就同样调用 `grokbot-wake`。只回看 6 小时内的话题；首次启动不回放历史；依赖 keluoluo 上 lark-cli 的用户登录有效。
+
+- 脚本：`bin/grokbot-lark-forwarder`；plist 模板：`references/com.baicaicc.grokbot-lark-forwarder.plist`
+- 日志：`~/.local/state/grokbot/lark-forwarder.log`；已处理：`~/.local/state/grokbot/lark-forwarder/seen.json`
+
+两个服务共用 `~/.local/state/grokbot/lark-claimed/<message_id>`（原子创建）去重，同一条消息只唤醒一次。
 
 ## 它不做的事
 
@@ -77,4 +99,4 @@ URL 和密钥只在各机器的 `~/.config/grokbot/wake.env`（mode 600），字
 
 ## 更新脚本
 
-改本仓库 `skills/grokbot/bin/grokbot-wake`，合并后跑 `bin/sync`，再把它复制到各机器的 `~/.local/bin/grokbot-wake`。
+改本仓库 `skills/grokbot/bin/` 下的脚本，合并后跑 `bin/sync`，再复制到各机器的 `~/.local/bin/`（`grokbot-wake` 在 keluoluo 和 ubuntu；`grokbot-lark-*` 只在 keluoluo），改了飞书脚本后 `launchctl kickstart -k gui/$(id -u)/<服务名>`。

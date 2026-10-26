@@ -1,0 +1,24 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<!-- 先建 venv：uv venv --python python3.12 ~/.local/share/grokbot/venv && VIRTUAL_ENV=~/.local/share/grokbot/venv uv pip install lark-oapi
+     安装：sed "s#__HOME__#$HOME#g" 本文件 > ~/Library/LaunchAgents/com.baicaicc.grokbot-lark-bot.plist
+     然后 launchctl bootstrap gui/$(id -u) ~/Library/LaunchAgents/com.baicaicc.grokbot-lark-bot.plist -->
+<plist version="1.0">
+<dict>
+  <key>Label</key><string>com.baicaicc.grokbot-lark-bot</string>
+  <key>ProgramArguments</key>
+  <array>
+    <string>__HOME__/.local/share/grokbot/venv/bin/python</string>
+    <string>__HOME__/.local/bin/grokbot-lark-bot</string>
+  </array>
+  <key>EnvironmentVariables</key>
+  <dict>
+    <key>PATH</key><string>__HOME__/.local/bin:/opt/homebrew/bin:/usr/local/bin:/usr/bin:/bin</string>
+  </dict>
+  <key>RunAtLoad</key><true/>
+  <key>KeepAlive</key><true/>
+  <key>ThrottleInterval</key><integer>30</integer>
+  <key>StandardOutPath</key><string>__HOME__/.local/state/grokbot/lark-bot.log</string>
+  <key>StandardErrorPath</key><string>__HOME__/.local/state/grokbot/lark-bot.log</string>
+</dict>
+</plist>
