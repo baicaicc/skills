@@ -1,16 +1,22 @@
 ---
 name: grokbot
-description: 唤醒 dr eggbot（用户的 Grok Bot）处理个人系统的活，并取回它的结果。当需要它排查机器（keluoluo / ubuntu）、网络或 GL-MT3000 抖动、检查各项能力是否健康、在仓库开/改 PR，或用户说“让 eggbot / grokbot 看一下”“叫醒 grok bot”时使用。
+description: 从 keluoluo / ubuntu 上的 Agent 或飞书唤醒用户的 Grok Bot（明哥2）处理个人系统的活，并取回结果。当本机做不了、要转给 Grok Bot 的事（综合协调、日常事务，或要它转交系统管家查机器、网络、能力健康），或用户说“让 grokbot / eggbot 看一下”“叫醒 grok bot”时使用。
 ---
 
-# 唤醒 dr eggbot
+# 唤醒 Grok Bot
 
-dr eggbot 是用户的 Grok Bot，跑在它自己的 box 上，能 SSH 到 `keluoluo` 和 `ubuntu`。适合交给它的活：
+Grok Bot 是用户的云端助手，各有自己的对话，共用一台 Linux 机器（Tailnet 节点 `grokbot`），能 SSH 到 keluoluo、ubuntu、kidsbox、北京等机器。用户想找谁就直接找谁，没有唯一入口（2026-10-26 用户决定）；某只 Bot 收到办不了的活，转给能办的 Bot，结果再交回用户。分工：
 
-- 机器：磁盘、进程、服务、日志、安装和配置检查
-- 网络：GL-MT3000 抖动、丢包、延迟，Tailscale 连通性
-- 能力健康：各 agent、技能、定时任务、连接器是否还能用
-- 仓库：按开发公约在 worktree 开分支、提交、推送、开 PR
+| Bot | 负责 |
+|---|---|
+| 明哥2 | 综合协调、日常事务；本 Skill 唤醒的就是它（它的 lark-wake 例程） |
+| 系统管家 | 机器、网络（如 GL-MT3000 抖动）、各项能力是否健康 |
+| dr eggbot | 只负责设计、创建 Grok Bot |
+| X 侦察员 | 每日关注的 AI X 账号摘要 |
+
+本 Skill 的命令只唤醒明哥2；要系统管家等其他 Grok Bot 办的事，照样交给明哥2，在任务里写清楚。“明哥”在别处指 OpenAI Dot 和明哥语音盒，不是明哥2。
+
+交给它的活可以是机器、网络、能力健康检查，也可以是按开发公约在 worktree 改仓库、开 PR。
 
 自己几条命令就能做完的事不要叫它。它被唤醒后要 1–3 分钟才开始干活，复杂任务可能十几分钟。
 
@@ -51,7 +57,7 @@ stdout 第一行永远是 `request_id`（形如 `20261026T011708-keluoluo-50d5a5
 
 ### @ 机器人（主入口）
 
-dr eggbot 有自己的飞书机器人 **link_GrokBot_keluoluo**（app `cli_aa55a4eaa538c08f`），已在「All in One · 统一工作群」。在群里 @ 它，或直接私聊它，就会唤醒：
+明哥2 用飞书机器人 **link_GrokBot_keluoluo**（app `cli_aa55a4eaa538c08f`），已在「All in One · 统一工作群」。在群里 @ 它，或直接私聊它，就会唤醒：
 
 ```
 @link_GrokBot_keluoluo 看下 ubuntu 的 docker 磁盘为什么满了
@@ -73,11 +79,11 @@ grokbot-lark-reply --chat oc_xxx "……"                     # 直接发到群
 echo "**加粗**" | grokbot-lark-reply --msg om_xxx --markdown -   # 富文本，- 读 stdin
 ```
 
-成功时打印新消息的 `message_id`。dr eggbot 回飞书用：`ssh keluoluo '~/.local/bin/grokbot-lark-reply --msg <om_> --thread "<text>"'`。
+成功时打印新消息的 `message_id`。Grok Bot 回飞书用：`ssh keluoluo '~/.local/bin/grokbot-lark-reply --msg <om_> --thread "<text>"'`。
 
 ### 唤醒词转发（备用）
 
-正文以 `eggbot`、`@eggbot`、`dr eggbot` 或 `grokbot` 开头（不用真的 @）也能唤醒。服务 `com.baicaicc.grokbot-lark-forwarder` 用 `lark-cli --as user` 每 15 秒读一次群消息，命中就同样调用 `grokbot-wake`。只回看 6 小时内的话题；首次启动不回放历史；依赖 keluoluo 上 lark-cli 的用户登录有效。
+正文以 `eggbot`、`@eggbot`、`dr eggbot` 或 `grokbot` 开头（不用真的 @）也能唤醒；唤醒词沿用旧名，唤醒的同样是明哥2，默认只看「All in One · 统一工作群」。服务 `com.baicaicc.grokbot-lark-forwarder` 用 `lark-cli --as user` 每 15 秒读一次群消息，命中就同样调用 `grokbot-wake`。只回看 6 小时内的话题；首次启动不回放历史；依赖 keluoluo 上 lark-cli 的用户登录有效。
 
 - 脚本：`bin/grokbot-lark-forwarder`；plist 模板：`references/com.baicaicc.grokbot-lark-forwarder.plist`
 - 日志：`~/.local/state/grokbot/lark-forwarder.log`；已处理：`~/.local/state/grokbot/lark-forwarder/seen.json`
@@ -86,10 +92,11 @@ echo "**加粗**" | grokbot-lark-reply --msg om_xxx --markdown -   # 富文本�
 
 ## 它不做的事
 
+改仓库照开发公约：短分支 + PR，技术验收后自己合并（CONSTITUTION §4.4），不直接推送或改写 main / master。
+
 以下请求它会 `refused`，需要时由用户本人操作或另行明确授权：
 
 - 删除数据（文件、数据库、快照、备份、容器卷）
-- 推送或改写 main，合并 PR（它只开 PR）
 - 重启路由器、切换代理节点或出口
 - 修改凭据：密码、密钥、token、wake.env
 
