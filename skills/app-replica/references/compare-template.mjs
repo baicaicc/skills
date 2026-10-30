@@ -1,4 +1,5 @@
-// Template: run the same user-level scenarios against our build and the comparison app.
+// Template: run the same user-level scenarios against our build and an existing comparison app
+// (not the step-2.5 probe in control/, which is only for planning).
 // Copy to ~/labs/<code>/compare/, then edit the `apps` adapters and the `scenarios` list.
 // Rules:
 // - Scenarios come from compare/scenarios.md, picked blind: an agent that has seen neither implementation picks them

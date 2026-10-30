@@ -18,7 +18,7 @@
 
 ## 锁定测试
 
-`tests/locked/`、`tests/corpus/`、`tests/locked.sha256` 在夜跑前由人审过并锁定，**不得修改、删除、跳过或放宽**。认为某条锁定测试本身有误时：不改它，在 `docs/locked-test-issues.md` 写明测试名、理由和证据，然后继续做别的。
+`tests/locked/`、`tests/corpus/`、`tests/locked.sha256`、`scripts/verify.sh` 在夜跑前由人审过并锁定，**不得修改、删除、跳过或放宽**。认为某条锁定测试本身有误时：不改它，在 `docs/locked-test-issues.md` 写明测试名、理由和证据，然后继续做别的。
 
 测试构建必须暴露契约 `window.<app>`：
 
@@ -32,7 +32,7 @@
 - 原生自测（桌面 App）：<列出 --self-test 参数与各自覆盖的内容>
 - 每完成一个能验证的小步就本地 `git commit`，提交信息写清做了什么、哪些测试通过。不提交会让锁定测试从通过变成失败的改动。
 - `docs/validation.md` 分三节：`## 实际执行通过`、`## 模拟验证`、`## 未验证`。没执行的不写成通过。
-- 交付物由 verify 第 6 段检查：`README.md` 只写「实际执行通过」里有的能力，截图用当前界面（放 `docs/screenshots/`，提交）；应用图标自己画；`scripts/package.sh` 在 `build/release/` 出安装包和同名 `.sha256`（不提交、不发布）。
+- 交付物由 verify 第 6 段检查：`README.md` 只写「实际执行通过」里有的能力，截图用当前界面（放 `docs/screenshots/`，提交）；应用图标自己画；`scripts/package.sh` 在 `build/release/` 出安装包和同名 `.sha256`（`.sha256` 里只写文件名，不带路径；不提交、不发布）。
 
 ## 遇阻
 

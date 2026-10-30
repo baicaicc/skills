@@ -21,18 +21,20 @@ tests/
   locked/r<N>-<名>.spec.ts  每条 P0 一个文件，文件头注明期望值来源
   locked/ui-review.md       观感量表与固定界面状态（references/ui-review.md），一起锁
   corpus/                   语料（自写或许可兼容的规范样例）
-  locked.sha256             上面两个目录所有文件的哈希
+  locked.sha256             上面两个目录所有文件和 scripts/verify.sh 的哈希
   features/                 P1 测试，Agent 夜里写
 ```
 
 ## 锁定与核对
 
 ```bash
-(find tests/locked tests/corpus -type f | sort | xargs shasum -a 256) > tests/locked.sha256
+(find tests/locked tests/corpus -type f; echo scripts/verify.sh) | sort | xargs shasum -a 256 > tests/locked.sha256
 shasum -a 256 tests/locked.sha256 > ../run/locked-sha256.of-hashfile   # 晨检用：哈希文件本身的哈希
+git add -A && git commit -m "基线：锁定测试、语料与验收脚本"
+git rev-parse HEAD > ../run/baseline-commit                            # 晨检用：基线提交号
 ```
 
-晨检核对三件事：`shasum -a 256 -c tests/locked.sha256`；哈希文件本身的哈希与记录一致；`git log -- tests/locked tests/corpus` 只有基线提交。
+晨检核对：`shasum -a 256 -c tests/locked.sha256`；哈希文件本身的哈希与记录一致；`git diff <基线提交> -- tests/locked tests/corpus tests/locked.sha256 scripts/verify.sh` 为空，`git log` 查这几个路径只有基线提交。
 
 ## 规模参考（Typora 试跑）
 
