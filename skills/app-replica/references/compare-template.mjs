@@ -1,8 +1,16 @@
 // Template: run the same user-level scenarios against our build and the comparison app.
 // Copy to ~/labs/<code>/compare/, then edit the `apps` adapters and the `scenarios` list.
-// Rules: drive both apps with real clicks/keys; judge only what a user gets back (saved bytes, visible text);
-// one fresh browser context per app per scenario. Output: a ✓/✗ table plus results.json.
-// Example below is the 2026-10-26 Typora run (mdlive vs TyporaX), kept as a working reference.
+// Rules:
+// - Scenarios come from compare/scenarios.md, picked blind: an agent that has seen neither implementation picks them
+//   from the original app's official feature list. Script each one as written; never add, drop or reword after the fact.
+// - Drive both apps with real clicks/keys; judge only what a user gets back (saved bytes, visible text);
+//   one fresh browser context per app per scenario. Label scenarios that simulate input (e.g. CDP IME events) as such.
+// - The final line is a raw count. Report scores deduplicated by root cause (failures sharing one cause count once),
+//   and name the dimensions this script does not compare (look and feel, packaging, safeguards, performance).
+// Output: a ✓/✗ table plus results.json.
+// Example below is the 2026-10-26 Typora run (mdlive vs TyporaX), kept for its adapters and helpers only. Do not
+// reuse its scenario list: it was picked after seeing TyporaX's weak spots, and both IME failures share the
+// trailing-newline cause already counted under 原文保真.
 // Same scenarios against both browser builds: mdlive (ours) and TyporaX (reference).
 // Usage: node compare.mjs <mdlive dist url> <typorax dist url> <corpus dir>
 // Each scenario drives the UI with real clicks and keys; output is read back the way a user would get it
@@ -128,7 +136,7 @@ scenarios.push({ group: '扩展语法直接渲染', name: 'front matter / 脚注
   return { pass, detail: sourceOnly ? '退回源码模式' : raw.length ? `原样显示 ${raw.join(' ')}` : '全部渲染' };
 } });
 
-scenarios.push({ group: '中文输入法', name: '在加粗词中间用拼音输入“中文”', async run(app, page) {
+scenarios.push({ group: '中文输入法（CDP 模拟）', name: '在加粗词中间用拼音输入“中文”', async run(app, page) {
   const doc = 'Say **bold** here.\n';
   await app.open(page, doc);
   await clickAfter(page, app.root(page), 'bo');
@@ -136,7 +144,7 @@ scenarios.push({ group: '中文输入法', name: '在加粗词中间用拼音输
   const out = await app.output(page);
   return { pass: out === 'Say **bo中文ld** here.\n', detail: JSON.stringify(out) };
 } });
-scenarios.push({ group: '中文输入法', name: '在标题末尾用拼音输入“标题”', async run(app, page) {
+scenarios.push({ group: '中文输入法（CDP 模拟）', name: '在标题末尾用拼音输入“标题”', async run(app, page) {
   const doc = '# Title\n\nBody.\n';
   await app.open(page, doc);
   await clickAfter(page, app.root(page), 'Title');

@@ -4,7 +4,8 @@
 
 ## 读什么
 
-- `docs/requirements.md`：需求。P0 = 核心特质（已有锁定测试），P1 = 功能，P2 = 不做。
+- `docs/requirements.md`：需求。P0 = 核心特质（已有锁定测试），P1 = 功能（含「健壮性与防护」「交付物」），P2 = 不做。
+- `tests/locked/ui-review.md`：观感量表和固定界面状态。晨检会按它对截图打分。
 - `docs/architecture.md`：技术方案。偏离方案前，先在 `docs/decisions.md` 写一行理由。
 - `docs/progress.md`：进度清单。每轮开始先读它和 `git log --oneline -20`，结束前更新它。
 
@@ -31,6 +32,7 @@
 - 原生自测（桌面 App）：<列出 --self-test 参数与各自覆盖的内容>
 - 每完成一个能验证的小步就本地 `git commit`，提交信息写清做了什么、哪些测试通过。不提交会让锁定测试从通过变成失败的改动。
 - `docs/validation.md` 分三节：`## 实际执行通过`、`## 模拟验证`、`## 未验证`。没执行的不写成通过。
+- 交付物由 verify 第 6 段检查：`README.md` 只写「实际执行通过」里有的能力，截图用当前界面（放 `docs/screenshots/`，提交）；应用图标自己画；`scripts/package.sh` 在 `build/release/` 出安装包和同名 `.sha256`（不提交、不发布）。
 
 ## 遇阻
 
@@ -38,4 +40,4 @@
 
 ## 顺序
 
-P0 锁定测试 → 外壳与文件生命周期 → P1（按需求表顺序）→ 打磨。全部 P1 完成且 verify 通过后，在 `docs/progress.md` 第一行写 `ALL_DONE`，然后在"打磨"一节继续。
+P0 锁定测试 → 外壳与文件生命周期 → P1（按需求表顺序，含健壮性与防护）→ 交付物 → 打磨。全部 P1（含交付物）完成且 verify 通过后，在 `docs/progress.md` 第一行写 `ALL_DONE`，然后在"打磨"一节继续。
