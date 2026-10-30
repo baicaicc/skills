@@ -5,13 +5,14 @@
 ## 读什么
 
 - `docs/requirements.md`：需求。P0 = 核心特质（已有锁定测试），P1 = 功能（含「健壮性与防护」「交付物」），P2 = 不做。
-- `tests/locked/ui-target/`：用户选定的外观样稿（`target.html`、`target.png`）和要对照的界面状态（`states.md`）。照样稿的版式、字体、配色和间距做，不求像素一致；晨检会逐张对照。
+- `tests/locked/ui-target/`：原版在几个固定界面状态下的截图（`orig-*.png`）和状态清单（`states.md`）。看起来要和原版同一路（版式、信息层级、间距、字号层次、深浅色），但自己写；晨检会逐张对照。
 - `docs/architecture.md`：技术方案。偏离方案前，先在 `docs/decisions.md` 写一行理由。
 - `docs/progress.md`：进度清单。每轮开始先读它和 `git log --oneline -20`，结束前更新它。
 
 ## 边界
 
 - 不使用 <原 App> 的代码、主题、样式、字体、图标、文案或图片；不读取 `~/labs/<代号>/inputs`、`evidence`、`control` 与 `checks`。名字、界面、文档里不出现 "<原 App>" 字样（`docs/` 里的需求来源说明除外）。
+- `tests/locked/ui-target/` 的原版截图只用来对照：不进产品、README 和安装包，不从里面抠图、取色照抄。
 - 依赖只用成熟开源库；新增依赖在 `THIRD_PARTY_NOTICES.md` 记名称和许可证。
 - 不下载 Playwright 浏览器（用系统 Chrome），不安装大型工具链，生成物只放 `build/`、`dist/`。
 - 只在本仓库目录内写文件；不改系统设置、全局配置和其他项目。

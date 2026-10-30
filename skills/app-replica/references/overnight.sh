@@ -8,9 +8,11 @@
 # - 连续两轮无提交 → 下一轮换备用模型。
 # - 限流按类型退避：周期配额等到重置；速率限制等 10 分钟；网关 503 等 2 分钟并换模型。
 # - 单轮超过 ROUND_MAX_MIN 且工作区干净时结束本轮（Opus 靠自动压缩上下文，不会自己停）。
+# - DEADLINE 最多是启动后 10 小时；主力和备用的配额都要到截止时间以后才重置时，提前结束（技能「常设授权」第 2 条）。
 repo=${REPO:?}           # 新仓库目录
 run=${RUN_DIR:?}         # 本目录（含 launch.py、models.json、*.env、KICKOFF*.md）
 deadline=${DEADLINE:?}
+[ $(( deadline - $(date +%s) )) -le 36000 ] || { echo "DEADLINE 超过启动后 10 小时" >&2; exit 1; }
 primary=${PRIMARY:-glm}; backup=${BACKUP:-opus}
 round_max=$(( ${ROUND_MAX_MIN:-90} * 60 ))
 mkdir -p $run/logs
@@ -48,6 +50,8 @@ while [ $(date +%s) -lt $deadline ] && [ ! -e $run/STOP ]; do
   case $ending in
     quota*)     wait_s=${ending#quota }
                 if [ $model = $primary ]; then primary_until=$(( $(date +%s) + wait_s )); log "primary quota: using $backup for ${wait_s}s"
+                elif [ $(date +%s) -lt $primary_until ] && [ $primary_until -ge $deadline ] && [ $(( $(date +%s) + wait_s )) -ge $deadline ]; then
+                  log "both channels out of quota past the deadline: stopping"; break
                 else log "backup quota: sleeping"; sleep $(( wait_s < deadline - $(date +%s) ? wait_s : 60 )); fi ;;
     ratelimit*) sleep ${ending#ratelimit } ;;
     gateway)    sleep 120; [ $model = $primary ] && switch_next=1 ;;

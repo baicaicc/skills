@@ -47,6 +47,8 @@ refs += re.findall(r'\]\(\s*([^)\s<]+)', text)                         # [a](x.p
 refs += re.findall(r'^\s*\[(?!\^)[^\]]+\]:\s*<?([^>\s]+)', text, re.M) # [a]: x.png
 refs += re.findall(r'<img\b[^>]*?\bsrc\s*=\s*["\']([^"\']+)', text, re.I)
 local = [urllib.parse.unquote(r.split('#')[0]) for r in refs if not re.match(r'[a-z][a-z0-9+.-]*:|#', r, re.I)]
+if any('ui-target' in r for r in local):
+    sys.exit('VERIFY FAILED：README 不能引用 tests/locked/ui-target 里的原版截图')
 missing = sorted({r for r in local if r and not os.path.exists(r)})
 if missing:
     sys.exit('VERIFY FAILED：README 引用的文件不存在：' + '、'.join(missing))
