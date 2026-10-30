@@ -19,19 +19,22 @@
 tests/
   locked/harness.ts        契约包装：open / source / caretAt / visibleLines …
   locked/r<N>-<名>.spec.ts  每条 P0 一个文件，文件头注明期望值来源
+  locked/ui-target/         原版在固定界面状态下的截图（orig-*.png）与状态清单（states.md），一起锁
   corpus/                   语料（自写或许可兼容的规范样例）
-  locked.sha256             上面两个目录所有文件的哈希
+  locked.sha256             上面两个目录所有文件，加上 scripts/verify.sh、playwright.config.ts 的哈希
   features/                 P1 测试，Agent 夜里写
 ```
 
 ## 锁定与核对
 
 ```bash
-(find tests/locked tests/corpus -type f | sort | xargs shasum -a 256) > tests/locked.sha256
+(find tests/locked tests/corpus -type f; printf '%s\n' scripts/verify.sh playwright.config.ts) | sort | xargs shasum -a 256 > tests/locked.sha256
 shasum -a 256 tests/locked.sha256 > ../run/locked-sha256.of-hashfile   # 晨检用：哈希文件本身的哈希
+git add -A && git commit -m "基线：锁定测试、语料与验收脚本"
+git rev-parse HEAD > ../run/baseline-commit                            # 晨检用：基线提交号
 ```
 
-晨检核对三件事：`shasum -a 256 -c tests/locked.sha256`；哈希文件本身的哈希与记录一致；`git log -- tests/locked tests/corpus` 只有基线提交。
+晨检核对：`shasum -a 256 -c tests/locked.sha256`；哈希文件本身的哈希与记录一致；`git diff <基线提交> -- tests/locked tests/corpus tests/locked.sha256 scripts/verify.sh playwright.config.ts` 为空，`git log` 查这几个路径只有基线提交。
 
 ## 规模参考（Typora 试跑）
 

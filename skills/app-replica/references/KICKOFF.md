@@ -10,7 +10,7 @@
 4. 本轮结束前：更新 docs/progress.md 和 docs/validation.md，提交。工作区不留未提交改动。
 5. 驱动可能在任何时候结束本轮，所以随时保持"已提交即可交接"。
 
-不要修改 tests/locked、tests/corpus、tests/locked.sha256。不要推送、不要发布。遇阻按 AGENTS.md「遇阻」处理，不要停下。
+不要修改 tests/locked、tests/corpus、tests/locked.sha256、scripts/verify.sh、playwright.config.ts。不要推送、不要发布。遇阻按 AGENTS.md「遇阻」处理，不要停下。
 
 ## ===== run/KICKOFF-polish.md =====
 
@@ -18,9 +18,10 @@
 
 进度清单已全部完成（docs/progress.md 第一行 ALL_DONE），现在是打磨阶段。
 
-1. 先读 AGENTS.md、docs/progress.md（尤其「打磨」一节和实现备忘）、docs/validation.md 的「未验证」、docs/blockers.md（如有）和 `git log --oneline -20`。
-2. 选一个最有价值的问题：对照 docs/requirements.md 找没做或做得不完整的功能；或者自己做代码审查，优先找会丢数据、改坏原文、导致崩溃的缺陷。
-3. 先写能复现问题的测试（tests/features/），再修；`npm run test:locked` 和相关测试通过后 `git commit`。
+1. 先读 AGENTS.md、docs/progress.md（尤其「打磨」一节和实现备忘）、docs/validation.md 的「未验证」、docs/blockers.md（如有）、tests/locked/ui-target/states.md 和 `git log --oneline -20`。
+2. 选一个最有价值的问题：对照 docs/requirements.md 找没做或做得不完整的功能（含「健壮性与防护」「交付物」）；或者自己做代码审查，优先找会丢数据、改坏原文、导致崩溃的缺陷；或者改观感——晨检会把截图和 tests/locked/ui-target/ 的原版截图逐张对照。
+3. 功能和缺陷：先写能复现问题的测试（tests/features/），再修；`npm run test:locked` 和相关测试通过后 `git commit`。
+   观感：按 states.md 截当前构建，和对应的原版截图对照（能看图就自己看），挑差得最大的一处改，改完重截；只对齐版式、层级、间距、字号层次和深浅色，不照抄原版的主题、字体、图标、文案；记在 docs/ui-review-log.md，写明是你自评（模型名）和提交号；README 截图跟着更新，再 `git commit`。
 4. 本轮结束前更新 docs/progress.md 的「打磨」一节和 docs/validation.md，提交。工作区不留未提交改动。
 
-不要修改 tests/locked、tests/corpus、tests/locked.sha256。不要推送、不要发布。遇阻按 AGENTS.md「遇阻」处理，不要停下。
+不要修改 tests/locked、tests/corpus、tests/locked.sha256、scripts/verify.sh、playwright.config.ts。不要推送、不要发布。遇阻按 AGENTS.md「遇阻」处理，不要停下。
