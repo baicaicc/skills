@@ -10,7 +10,7 @@
 4. 本轮结束前：更新 docs/progress.md 和 docs/validation.md，提交。工作区不留未提交改动。
 5. 驱动可能在任何时候结束本轮，所以随时保持"已提交即可交接"。
 
-不要修改 tests/locked、tests/corpus、tests/locked.sha256、scripts/verify.sh。不要推送、不要发布。遇阻按 AGENTS.md「遇阻」处理，不要停下。
+不要修改 tests/locked、tests/corpus、tests/locked.sha256、scripts/verify.sh、playwright.config.ts。不要推送、不要发布。遇阻按 AGENTS.md「遇阻」处理，不要停下。
 
 ## ===== run/KICKOFF-polish.md =====
 
@@ -24,4 +24,4 @@
    观感：按量表截图自评（能看图就自己看），挑分最低的一项改，改完重截再评；分数记在 docs/ui-scores.md，写明评分人（你的模型名，自评）和提交号；README 截图跟着更新，再 `git commit`。
 4. 本轮结束前更新 docs/progress.md 的「打磨」一节和 docs/validation.md，提交。工作区不留未提交改动。
 
-不要修改 tests/locked、tests/corpus、tests/locked.sha256、scripts/verify.sh。不要推送、不要发布。遇阻按 AGENTS.md「遇阻」处理，不要停下。
+不要修改 tests/locked、tests/corpus、tests/locked.sha256、scripts/verify.sh、playwright.config.ts。不要推送、不要发布。遇阻按 AGENTS.md「遇阻」处理，不要停下。

@@ -18,7 +18,7 @@
 
 ## 锁定测试
 
-`tests/locked/`、`tests/corpus/`、`tests/locked.sha256`、`scripts/verify.sh` 在夜跑前由人审过并锁定，**不得修改、删除、跳过或放宽**。认为某条锁定测试本身有误时：不改它，在 `docs/locked-test-issues.md` 写明测试名、理由和证据，然后继续做别的。
+`tests/locked/`、`tests/corpus/`、`tests/locked.sha256`、`scripts/verify.sh`、`playwright.config.ts` 在夜跑前由人审过并锁定，**不得修改、删除、跳过或放宽**。认为某条锁定测试本身有误时：不改它，在 `docs/locked-test-issues.md` 写明测试名、理由和证据，然后继续做别的。
 
 测试构建必须暴露契约 `window.<app>`：
 

@@ -8,7 +8,7 @@ cd "$root"
 fail() { echo "VERIFY FAILED：$*" >&2; exit 1; }
 
 if [ "${VERIFY_FROM:-1}" != 5 ]; then
-  # 1. 锁定测试、语料与本文件未被改动
+  # 1. 锁定测试、语料、本文件与 playwright.config.ts 未被改动
   shasum -a 256 -c tests/locked.sha256 --quiet
 
   # 2. 构建（类型检查 + 打包）
@@ -37,9 +37,11 @@ done
 [ -s README.md ] || fail "缺 README.md"
 if grep -qi '<原 App>' README.md; then fail "README 里出现了原 App 的名字"; fi
 python3 -I - README.md <<'PY'
-# README 引用的本地文件都要存在，且至少有一张本地截图；外链和页内锚点不在这里查。
+# README 引用的本地文件都要存在，且至少有一张本地截图；外链、页内锚点和代码里的示例不在这里查。
 import os, re, sys, urllib.parse
 text = open(sys.argv[1], encoding='utf-8').read()
+text = re.sub(r'^ {0,3}(`{3,}|~{3,}).*?^ {0,3}\1', '', text, flags=re.M | re.S)   # 代码块
+text = re.sub(r'`[^`\n]+`', '', text)                                            # 行内代码
 refs = re.findall(r'\]\(\s*<([^>]+)>', text)                          # [a](<含空格 的路径.png>)
 refs += re.findall(r'\]\(\s*([^)\s<]+)', text)                         # [a](x.png "标题")
 refs += re.findall(r'^\s*\[(?!\^)[^\]]+\]:\s*<?([^>\s]+)', text, re.M) # [a]: x.png
@@ -55,9 +57,8 @@ PY
 rm -rf build/release                                              # 旧产物不算数
 bash scripts/package.sh || fail "scripts/package.sh 失败"
 #   package.sh 由夜跑 Agent 写：在 build/release/ 出安装包（桌面 DMG / 网页压缩包）和同名 .sha256，.sha256 里只写文件名
-sums=$(find build/release -maxdepth 1 -name '*.sha256' 2>/dev/null || true)
-[ -n "$sums" ] || fail "build/release/ 里没有 .sha256"
-if grep -q / $sums; then fail ".sha256 里只写文件名，不带路径"; fi
+if [ -z "$(find build/release -maxdepth 1 -name '*.sha256' 2>/dev/null)" ]; then fail "build/release/ 里没有 .sha256"; fi
+if [ -n "$(find build/release -maxdepth 1 -name '*.sha256' -exec grep -l / {} +)" ]; then fail ".sha256 里只写文件名，不带路径"; fi
 (cd build/release && shasum -a 256 -c --quiet ./*.sha256) || fail "安装包和 .sha256 对不上"
 # hdiutil verify build/release/*.dmg >/dev/null || fail "DMG 校验失败"   # 桌面 App
 

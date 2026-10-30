@@ -61,16 +61,17 @@ REA 的坑：`decode-interface-builder` 默认最多解 64 个文档，常被 Sp
 - 需求表草稿（`references/requirements.md` 格式）。P0 = 核心特质（3–6 条，原 App 的灵魂：从 L0/L1 来，期望值只取 L1 实测；再加上第 2.5 步自造探针版暴露的缺口）；P1 = 功能，模板默认带「健壮性与防护」「交付物」两节，人确认时可以划进 P2；P2 = 不做。
 - L1 实验计划：每条写清操作、读回什么（保存后的字节、可见文本）、对应哪条需求。实际操作放到第 2.5 步，跑完探针版再定先测哪些。
 
-## 2.5 自造探针版（Agent + 人确认，约 40–60 分钟，未实测全流程）
+## 2.5 自造探针版（Agent + 人确认，约 70–90 分钟，含 L1 约 30 分钟；未实测全流程）
 
 快速、不加约束地做一版，拿 L1 实验去跑它。用处有两个：用它的实际失败坐实第 3 步的「不选 X」；补规划漏掉的需求条目。它只用于规划，不是晨检的对照组。依据与局限见证据文件「自造探针版」。
 
-1. **造探针版**（另起一个 Agent，和第 2 条同时做）：放在 labs 之外的独立目录 `/tmp/<代号>-probe/`。提示词只给一句目标（「做一个 X 风格的 App」）、测试契约（如 `window.app.load/source`、编辑区根元素的 testid）和读写范围（「只在 /tmp/<代号>-probe/ 里读写；不读这台机器上的其他目录」）；不给需求表、P0、架构。做完拷进 `~/labs/<代号>/control/` 存档，删掉 /tmp 里那份（夜跑的越界审计不查 /tmp）。
+1. **造探针版**（另起一个 Agent，和第 2 条同时做）：放在 labs 之外的独立目录 `/tmp/<代号>-probe/`。提示词只给一句目标（「做一个 X 风格的 App」）、测试契约（如 `window.app.load/source`、编辑区根元素的 testid）和读写范围（「只在 /tmp/<代号>-probe/ 里读写；不读这台机器上的其他目录」）；不给需求表、P0、架构。做完拷进 `~/labs/<代号>/control/` 存档，不带 node_modules、dist 等生成物，再删掉 /tmp 里那份（夜跑的越界审计不查 /tmp）：
+   `mkdir -p ~/labs/<代号>/control && tar -C /tmp/<代号>-probe --exclude node_modules --exclude dist --exclude build -cf - . | tar -C ~/labs/<代号>/control -xf - && rm -rf /tmp/<代号>-probe`
 2. **写实验脚本，在看探针版之前写好**：把 L1 实验计划写成能对任意网页构建运行的 Playwright 脚本，放 `~/labs/<代号>/checks/`。`run.mjs <url> <out.json>` 跑全部实验，记下读回的结果；`compare.mjs <answers.json> <out.json>` 把结果和原 App 的答案逐条比。`answers.json` 只放 L1 实测，没测过的写 unknown、不比较，推断出来的标明。
 3. **先跑探针版**，拿到它在每条实验上的原始结果。
 4. **再做 L1**（约 30 分钟）：先保证每条 P0 草稿都有实测期望值；剩下的时间优先测「探针版结果可疑、L0 又有明确描述」的实验。结果写进需求表的 L1 观察表和 `answers.json`。原 App 是网页时，直接用同一个脚本跑原 App 拿答案。
 5. **比较，按根因分组**：同一根因的多项差异合成一条。
-6. **每条根因定去处**。判据：修它要换核心组件或绕开其数据模型 → 结构性；加插件、渲染器或配置能修 → 覆盖性；拿不准就看探针版的说明和依赖，写一句理由给人确认。
+6. **每条根因定去处**。判据：修它要换核心组件或绕开其数据模型 → 结构性；加插件、渲染器或配置能修 → 覆盖性；拿不准就看探针版的说明和依赖，写一句理由给人确认（例：证据文件里的 R2）。
    - 结构性 → 进 P0，并写进第 3 步当「不选 X」的证据（如富文本保存要重新序列化，会改写原文）。
    - 覆盖性 → 是原 App 的标志性行为（L0 反复强调、L1 实测成立）就进 P0，否则进 P1。
 7. **人确认**：根因表连同需求表一起给人，确认 P0 和 P2。
@@ -86,8 +87,8 @@ REA 的坑：`decode-interface-builder` 默认最多解 64 个文档，常被 Sp
 1. **锁定测试**（`references/locked-test-guide.md`）：每条 P0 写成测试，期望值取自 L1 实测。测试通过一个小契约读写应用状态（如 `window.<app>.load/source/setCaret`），把契约写进 AGENTS.md。语料文件覆盖边界：BOM、CRLF、无末尾换行、中文、不规整格式。
 2. **一条验收命令**（`references/verify.sh`）：哈希校验 → 构建 → 全部测试 → 原生自测 → 文档检查 → 交付物检查（README 与截图、图标、安装包与校验和），任何一步失败即停并说明原因，最后输出 `VERIFY PASSED`。第 4、6 段按项目改好；人划进 P2 的交付物，删掉第 6 段对应几行。
 3. **观感量表**（`references/ui-review.md`）：定 3–5 个固定界面状态（怎么到达、截图文件名），**给人确认**，连同量表存成 `tests/locked/ui-review.md`。夜里打磨阶段按它自评，晨检按它打分。
-4. **对着空壳跑一遍，必须全红但能跑**：试跑时这一步当场抓到 tsconfig 缺 node 类型，不然夜里第一分钟就会卡住。第 3 段红了后面不会跑，所以再放上占位的 README（带一张截图）、图标和 `scripts/package.sh`，跑 `VERIFY_FROM=5 bash scripts/verify.sh`，应输出 `VERIFY PARTIAL`；跑通后删掉占位文件。
-5. 锁定：`(find tests/locked tests/corpus -type f; echo scripts/verify.sh) | sort | xargs shasum -a 256 > tests/locked.sha256`，记下这个文件本身的哈希，提交基线，基线提交号写进 `run/baseline-commit`（命令见 `references/locked-test-guide.md`）。
+4. **对着空壳跑一遍，必须全红但能跑**：试跑时这一步当场抓到 tsconfig 缺 node 类型，不然夜里第一分钟就会卡住。第 3 段红了后面不会跑，所以再放上带三节标题的 `docs/validation.md`（留作骨架），以及占位的 README（带一张截图）、图标和 `scripts/package.sh`，跑 `VERIFY_FROM=5 bash scripts/verify.sh`，应输出 `VERIFY PARTIAL`；跑通后删掉 README、图标、package.sh 这几个占位。
+5. 锁定：`(find tests/locked tests/corpus -type f; printf '%s\n' scripts/verify.sh playwright.config.ts) | sort | xargs shasum -a 256 > tests/locked.sha256`（还有别的决定跑哪些测试的配置文件，一起加进去），记下这个文件本身的哈希，提交基线，基线提交号写进 `run/baseline-commit`（命令见 `references/locked-test-guide.md`）。
 
 ## 5. 写任务书（Agent，10 分钟）
 
@@ -126,7 +127,7 @@ botmux 定时任务两个，都用 `--topic` 建在当前话题：
 
 照 `references/morning-review.md` 做，结论发到话题：
 
-1. 锁定文件（测试、语料、`scripts/verify.sh`）：哈希一致，和基线提交的 diff 为空，git 历史只有基线提交。
+1. 锁定文件（测试、语料、`scripts/verify.sh`、`playwright.config.ts`）：哈希一致，和基线提交的 diff 为空，git 历史只有基线提交。
 2. 越界审计（`references/audit.py`）：所有命令与读写文件的路径，查有没有写到项目外、推送、全局安装、读 inputs/evidence/control/checks、改系统配置。
 3. 独立重跑总验收（直接 `bash scripts/verify.sh`）；没提交的遗留改动先 `git stash`，不要混进验收。
 4. 交付物与防护：验收命令只查了文件在不在。再核对 README 写的每项能力都已实现、截图是当前界面、安装包装上能用；需求表「健壮性与防护」每条都有测试且通过。
