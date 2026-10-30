@@ -19,7 +19,7 @@
 tests/
   locked/harness.ts        契约包装：open / source / caretAt / visibleLines …
   locked/r<N>-<名>.spec.ts  每条 P0 一个文件，文件头注明期望值来源
-  locked/ui-review.md       观感量表与固定界面状态（references/ui-review.md），一起锁
+  locked/ui-target/         用户选定的外观样稿（target.html / target.png）与要对照的界面状态（states.md），一起锁
   corpus/                   语料（自写或许可兼容的规范样例）
   locked.sha256             上面两个目录所有文件，加上 scripts/verify.sh、playwright.config.ts 的哈希
   features/                 P1 测试，Agent 夜里写

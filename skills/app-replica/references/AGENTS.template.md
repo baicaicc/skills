@@ -5,7 +5,7 @@
 ## 读什么
 
 - `docs/requirements.md`：需求。P0 = 核心特质（已有锁定测试），P1 = 功能（含「健壮性与防护」「交付物」），P2 = 不做。
-- `tests/locked/ui-review.md`：观感量表和固定界面状态。晨检会按它对截图打分。
+- `tests/locked/ui-target/`：用户选定的外观样稿（`target.html`、`target.png`）和要对照的界面状态（`states.md`）。照样稿的版式、字体、配色和间距做，不求像素一致；晨检会逐张对照。
 - `docs/architecture.md`：技术方案。偏离方案前，先在 `docs/decisions.md` 写一行理由。
 - `docs/progress.md`：进度清单。每轮开始先读它和 `git log --oneline -20`，结束前更新它。
 
