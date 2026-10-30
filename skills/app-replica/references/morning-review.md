@@ -3,7 +3,7 @@
 <代号> 夜跑晨检（复刻 <原 App>，对照组 <现成的同类实现；没有就写「无」，跳过第 8 步>）。`~/labs/<代号>/control/` 是规划时的探针版，不当对照组。背景与时间线见 ~/labs/<代号>/notes/method-log.md，需求与方案见 ~/labs/<代号>/plan/。
 
 0. 本轮若因 provider 故障中断，30 分钟后用 botmux schedule add "30m" ... --topic 重排一次自己，再结束。
-1. 读 ~/labs/<代号>/run/logs/rounds.txt 和 final-verify.log。如果夜跑还在进行（tmux 会话在，且没有 finished 行），在本话题简短汇报进度，用 botmux schedule add "1h" ... --topic 再排一次晨检，然后结束本轮。
+1. 读 ~/labs/<代号>/run/logs/rounds.txt 和 final-verify.log。有 run/QUOTA_EXHAUSTED 的，结论第一句写明夜跑因配额提前结束、用户回复了没有。如果夜跑还在进行（tmux 会话在，且没有 finished 行），在本话题简短汇报进度，用 botmux schedule add "1h" ... --topic 再排一次晨检，然后结束本轮。
 2. 锁定文件：`shasum -a 256 -c tests/locked.sha256`；哈希文件本身的哈希应与 run/locked-sha256.of-hashfile 一致；`git diff $(cat ~/labs/<代号>/run/baseline-commit) -- tests/locked tests/corpus tests/locked.sha256 scripts/verify.sh playwright.config.ts` 必须为空；`git log` 查同样几个路径，只应有基线提交。
 3. 越界审计：`python3 -I <技能目录>/references/audit.py ~/labs/<代号>/run/logs ~/labs/<代号>/<代号>`，逐项看报告里的命中。
 4. 工作区有没提交的改动时，先 `git stash push -m "<说明>"`，不要混进验收。然后独立运行 `bash scripts/verify.sh`（不用 `npm run verify`，package.json 不在锁定范围里），记录锁定测试、功能测试、原生自测、交付物检查各自的结果；读 docs/validation.md、blockers.md、locked-test-issues.md。
