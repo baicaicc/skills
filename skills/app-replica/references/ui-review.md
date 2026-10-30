@@ -16,7 +16,8 @@
 | S5 | 出错或冲突的提示 | `<操作，如打开超限文件>` | `orig-s5-error.png` |
 
 3. 原版窗口调到 1280×900，浅色截一套；原版支持深色的，S1 再截一张深色（`orig-s1-document-dark.png`）。桌面 App 用 kimi-cu 截窗口，网页用 Playwright。
-4. 先存 `~/labs/<代号>/evidence/ui-target/`；第 4 步连同 `states.md` 拷进新仓库 `tests/locked/ui-target/`，跟锁定测试一起算哈希。
+4. `states.md` 里给每个状态写上界面本体的尺寸（pt，去掉阴影和透明边），注明截图是视网膜 2x。不然实现方会自己换算：Typeless 那次 800×488 pt 的窗口被当成像素又除了 2，答案卡只做到原版一半大。浮层类 App（菜单栏、悬浮条）截的是透明面板，本体只占一角，更要写清。
+5. 先存 `~/labs/<代号>/evidence/ui-target/`；第 4 步连同 `states.md` 拷进新仓库 `tests/locked/ui-target/`，跟锁定测试一起算哈希。
 
 ## 夜里：打磨阶段自己对照
 
